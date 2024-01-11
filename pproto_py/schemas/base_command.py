@@ -1,8 +1,6 @@
 from uuid import UUID
-from typing import List
 from pydantic import BaseModel
 from enum import Enum
-from pydantic import Field
 
 
 class Type(Enum):
@@ -15,6 +13,7 @@ class Status(Enum):
     SUCCESS = "Success"
     FAILED = "Failed"
     ERROR = "Error"
+
 
 class Priority(Enum):
     HIGH = "High"
@@ -39,17 +38,13 @@ class BaseMessage(BaseModel):
     command: UUID
     type: Type
     execStatus: Status
-    priority: Priority 
+    priority: Priority
     tags: list
     maxTimeLife: int
     content: BaseModel
     compression: Compression
 
 
-
-
 class BaseContent(BaseModel):
-
-    
     async def request(kwargs) -> dict | None:
         pass
