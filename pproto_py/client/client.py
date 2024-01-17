@@ -1,4 +1,5 @@
 import asyncio
+from pproto_py.schemas import BaseMessage
 
 
 class Client:
@@ -19,8 +20,8 @@ class Client:
         data = await self.__reader.read(100)
         print(f'Received: {data.decode()!r}')
         
-    async def write(self, message):
-        self.__writer.write(message.encode())
+    async def write(self, message: BaseMessage):
+        self.__writer.write((message.model_dump_json()).encode())
         await self.__writer.drain()
         self.__writer.close()
         await self.__writer.wait_closed()
@@ -28,8 +29,14 @@ class Client:
     
 async def main():
     client = Client()
+    """
+    FIXME: убрать connect() в асинхронный метод __init__() (переопределить магический метод __init__()).
+    # как вариант попробовать готовую библиотеку для опредления асинхронного __init__() в любом классе
+    - https://pypi.org/project/asyncinit/
+    """
     await client.connect()
-    await client.write('test string')
+    base_message = BaseMessage()
+    await client.write(base_message)
 
 
 if __name__ == "__main__":
