@@ -1,7 +1,8 @@
 from uuid import UUID, uuid4
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_serializer
 from enum import Enum
-from typing import Any
+from typing import Any, Optional
+from .commands import session, Client
 
 
 class Type(Enum):
@@ -41,17 +42,32 @@ class BaseMessage(BaseModel):
     execStatus: Status = Field(default=Status.FAILED.value)
     priority: Priority = Field(default=Priority.NORMAL.value)
     tags: list = Field(default=[])
-    maxTimeLife: int = Field(default=30)
-    content: BaseModel 
+    maxTimeLife: int = Field(default=-1)
     compression: Compression = Field(default=Compression.NONE.value)
+    content: BaseModel | None 
+
+
+    @model_serializer()
+    def serialize_model(self):
+        
+        if self.content is None:
+            return {"id": self.id,"command": self.command,"flags": ""}
+        else: 
+            return {"id": self.id,"command": self.command,"flags": "", "content": self.content.model_dump_json()}
 
 
 class BaseContent(BaseModel):
-    @classmethod
-    async def format_answer(self, raw_records: dict, model: BaseModel) -> BaseModel | None:
-        if not raw_records:
-            return None
-        return map(lambda x: model(**x), raw_records)
+    
+    async def send( self, 
+                    server: Client,
+                   **message_params) -> UUID:
+        message = BaseMessage(**message_params,content=self)
+        await server.write_with_callback(message,self.answer)
+        return message.id
+    
+    
+    async def answer() -> None:
+        pass
 
     # @classmethod
     # async def answer_model(self, func, model: Type[BaseModel]):

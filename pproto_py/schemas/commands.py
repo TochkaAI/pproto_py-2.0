@@ -1,9 +1,25 @@
-from enum import Enum
+from pproto_py.client import Client
+from pydantic import BaseModel
+import ast
 
 
-class Commands(Enum):
-    Compatible = "173cbbeb-1d81-4e01-bf3c-5d06f9c878c3"
-    Unknown = "4aef29d6-5b1a-4323-8655-ef0d4f1bb79d"
-    Error = "b18b98cc-b026-4bfe-8e33-e7afebfbe78b"
-    CloseConnection = "e71921fd-e5b3-4f9b-8be7-283e8bb2a531"
-    EchoConnection = "db702b07-7f5a-403f-963a-ec50d41c7305"
+def session(func):
+    session = Client()
+    def wrapper(*args, **kwargs):
+        return func(*args,session, **kwargs)
+    return wrapper
+
+async def format_answer(self, raw_records: dict, model: BaseModel) -> BaseModel | None:
+        if not raw_records:
+            return None
+        return map(lambda x: model(**x), raw_records)
+
+
+def to_model(model: BaseModel):
+    def outher(func):
+        def inner(*args, **kwargs):
+            res = func(*args, **kwargs)
+            as_str = ast.literal_eval(res.decode('utf-8'))
+            return map(lambda x: model(**x), as_str)
+        return inner
+    return outher
