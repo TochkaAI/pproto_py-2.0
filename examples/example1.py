@@ -13,37 +13,36 @@ class Commands(Enum):
     EchoConnection = "db702b07-7f5a-403f-963a-ec50d41c7305"
 
 
-
 class MyAnswer(BaseModel):
     data: str
     num: int
     response: str
 
+
 class MyContent(BaseContent):
     data: str
     num: int
-    
+
     @BaseContent.answer_model(MyAnswer)
     async def response(self, func):
         async def wrapper():
             return await func()
+
         return await wrapper
 
 
-
- 
-
 class MyCommand(MyContent):
     command: UUID = Field(default=Commands.Compatible.value)
+
 
 async def main():
     test_content = MyCommand(data="[eq]", num=1)
     # {data:"[eq]",num:1 ,command: "Dsasadasd"}
 
     answer: MyAnswer = await test_content.send_with_answer()
-    
+
     answer = await test_content.give_me_answer()
 
-    
+
 loop = asyncio.get_event_loop()
 loop.run_until_complete(main)
