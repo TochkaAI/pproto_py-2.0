@@ -143,6 +143,17 @@ class Pproto(asyncio.Protocol, Base):
             return func
 
         return decorator
+    
+    def event(self,
+            id: UUID,):
+        def decorator(func: Callable) -> Callable:
+            self.add_pproto_route(
+                id=id,
+                func=func,
+                response_model=None,
+            )
+            return func
+        return decorator
 
     def add_exception_handler(self, exc_class: Exception, handler) -> None:  # pragma: no cover
         self.exception_handlers[exc_class] = handler
@@ -153,7 +164,7 @@ class Pproto(asyncio.Protocol, Base):
             return func
 
         return decorator
-
+    
     def middleware(self, middleware_type):
         pass
 
