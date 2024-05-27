@@ -1,3 +1,3 @@
-from .server import Server
+from .server import Pproto
 
-__all__ = ["Server"]
+__all__ = ["Pproto"]
