@@ -9,16 +9,14 @@ from pproto_py.base import Base
 
 
 class Client(Base):
-    @classmethod
-    async def create_connect(
-        self,
+
+    def __init__(self,
         host="127.0.0.1",
         port=8888,
         format=Formats.JSON_PROTOCOL_FORMAT.value,
         compatible=Commands.Compatible.value,
         use_compress=False,
-        compress_level: int = -1,
-    ) -> "Client":
+        compress_level: int = -1,):
         self.__host = host
         self.__port = port
         self.writer, self.reader = None, None
@@ -26,8 +24,10 @@ class Client(Base):
         self.compatible = compatible
         self.use_compress = use_compress
         self.compress_level = compress_level
+    
+    async def create_connect(self,) -> None:
         self.status_connect = await self.connect()
-        return self
+
 
     async def hello_message(self) -> None:
         format = UUID(self.__format).bytes
@@ -58,6 +58,7 @@ class Client(Base):
         await self.writer.drain()
         # TODO data_compatible checking
 
+    @staticmethod
     async def __case_message(data: bytes, callback_func: dict) -> None:
         as_dict = ast.literal_eval(data.decode("utf-8"))
         as_dict["flags"] = FlagMessage.parse_obj(as_dict["flags"])
@@ -72,7 +73,7 @@ class Client(Base):
             case Status.UNKNOWN.value:
                 await callback_func["unknown"](data)
 
-    @classmethod
+
     async def _read_with_callback(self, callback_func: dict) -> None:
         data_size = int.from_bytes(await self.reader.read(4), signed=True)
         data = await self.reader.read(abs(data_size))
