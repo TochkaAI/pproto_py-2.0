@@ -20,7 +20,7 @@ class Pproto(asyncio.Protocol, Base):
         port: int = 8888,
         format=Formats.JSON_PROTOCOL_FORMAT.value,
         compatible=Commands.Compatible.value,
-        use_compress = False,
+        use_compress=False,
     ):
         self.__host: str = host
         self.__port: int = port
@@ -31,7 +31,6 @@ class Pproto(asyncio.Protocol, Base):
         # self.middleware_routers: Dict[] = {}
         self.clients: Dict[UUID, (StreamReader, StreamWriter)] = {}
         self.use_compress = use_compress
-
 
     async def compatible_message(self, user_id: UUID) -> None:
         __reader, __writer = self.clients[user_id]
@@ -75,7 +74,7 @@ class Pproto(asyncio.Protocol, Base):
                     exception_response = await self.exception_handlers[type(ex)](message_as_dict, ex)
                     await self.send_answer(exception_response, writer)
                 else:
-                    traceback_text = traceback.format_exc() 
+                    traceback_text = traceback.format_exc()
                     await logger.error(f"ERROR -- {traceback_text}")
                     raise ex
             answer = await self.make_message(answer_response, BaseMessage(**message_as_dict))
@@ -110,7 +109,7 @@ class Pproto(asyncio.Protocol, Base):
         return message
 
     async def send_answer(self, message: BaseMessage, writer: StreamWriter) -> None:
-        writer.write(self.swap32_len(message=message,compress=self.use_compress))
+        writer.write(self.swap32_len(message=message, compress=self.use_compress))
         await writer.drain()
         if message.flags.compression.value == Compression.DISABLE.value:
             self.writer.write((message.model_dump_json()).encode())
@@ -143,9 +142,11 @@ class Pproto(asyncio.Protocol, Base):
             return func
 
         return decorator
-    
-    def event(self,
-            id: UUID,):
+
+    def event(
+        self,
+        id: UUID,
+    ):
         def decorator(func: Callable) -> Callable:
             self.add_pproto_route(
                 id=id,
@@ -153,6 +154,7 @@ class Pproto(asyncio.Protocol, Base):
                 response_model=None,
             )
             return func
+
         return decorator
 
     def add_exception_handler(self, exc_class: Exception, handler) -> None:  # pragma: no cover
@@ -164,7 +166,7 @@ class Pproto(asyncio.Protocol, Base):
             return func
 
         return decorator
-    
+
     def middleware(self, middleware_type):
         pass
 

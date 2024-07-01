@@ -16,19 +16,19 @@ class Client(Base):
         port=8888,
         format=Formats.JSON_PROTOCOL_FORMAT.value,
         compatible=Commands.Compatible.value,
-        use_compress = False,
+        use_compress=False,
+        compress_level: int = -1,
     ) -> "Client":
         self.__host = host
         self.__port = port
         self.writer, self.reader = None, None
         self.__format = format
         self.__compatible = compatible
-        self.status_connect = await self.connect()
         self.use_compress = use_compress
-        # TODO порого zip и уровень
+        self.compress_level = compress_level
+        self.status_connect = await self.connect()
         return self
 
-    @classmethod
     async def hello_message(self) -> None:
         format = UUID(self.__format).bytes
         self.writer.write(format)
@@ -37,7 +37,6 @@ class Client(Base):
         if data != format:
             raise FormatsException(error="The server format is different from the client")
 
-    @classmethod
     async def connect(self) -> bool:
         reader, writer = await asyncio.open_connection(self.__host, self.__port)
         self.writer = writer
@@ -46,7 +45,6 @@ class Client(Base):
         await self.compatible_message()
         return True
 
-    @classmethod
     async def compatible_message(self) -> None:
         data_size = int.from_bytes(await self.reader.read(4))
         data_compatible = await self.reader.read(data_size)
@@ -84,7 +82,7 @@ class Client(Base):
 
     async def write(self, message: BaseMessage) -> None:
         # TODO переписат ьс првоеркой на use_commpress
-        self.writer.write(self.swap32_len(message=message,compress=self.use_compress))
+        self.writer.write(self.swap32_len(message=message, compress=self.use_compress))
         await self.writer.drain()
         if message.flags.compression.value == Compression.DISABLE.value:
             self.writer.write((message.model_dump_json()).encode())
@@ -94,7 +92,6 @@ class Client(Base):
             self.writer.write(header + data)
         await self.writer.drain()
 
-    @classmethod
     async def write_with_callback(self, message: BaseMessage, callback_func: dict) -> None:
         self.writer.write(self.swap32_len(message=message))
         await self.writer.drain()
@@ -105,7 +102,6 @@ class Client(Base):
         await self.writer.drain()
         await self._read_with_callback(callback_func)
 
-    @classmethod
     async def close(self) -> None:
         self.writer.close()
         await self.writer.wait_closed()
