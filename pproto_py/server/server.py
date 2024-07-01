@@ -25,7 +25,7 @@ class Pproto(asyncio.Protocol, Base):
         self.__host: str = host
         self.__port: int = port
         self.__format = format
-        self.__compatible = compatible
+        self.compatible = compatible
         self.routers: Dict[UUID, Command] = {}
         self.exception_handlers: Dict[Exception, Callable] = {}
         # self.middleware_routers: Dict[] = {}
@@ -35,7 +35,7 @@ class Pproto(asyncio.Protocol, Base):
     async def compatible_message(self, user_id: UUID) -> None:
         __reader, __writer = self.clients[user_id]
         message = BaseMessage(
-            command=self.__compatible,
+            command=self.compatible,
             maxTimeLife=5,
         )
         __writer.write(self.swap32_len(message=message))
@@ -62,7 +62,7 @@ class Pproto(asyncio.Protocol, Base):
             self.clients[user_id] = (reader, writer)
             await self.hello_message(user_id)
             await self.compatible_message(user_id)
-            message: BaseMessage = BaseMessage(command=self.__compatible)
+            message: BaseMessage = BaseMessage(command=self.compatible)
         except PprotoCommonException as err:
             await logger.error(err)
         while message.command != Commands.CloseConnection.value:
