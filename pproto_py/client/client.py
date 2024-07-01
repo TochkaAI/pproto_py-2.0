@@ -23,7 +23,7 @@ class Client(Base):
         self.__port = port
         self.writer, self.reader = None, None
         self.__format = format
-        self._compatible = compatible
+        self.compatible = compatible
         self.use_compress = use_compress
         self.compress_level = compress_level
         self.status_connect = await self.connect()
@@ -49,7 +49,7 @@ class Client(Base):
         data_size = int.from_bytes(await self.reader.read(4))
         data_compatible = await self.reader.read(data_size)
         message = BaseMessage(
-            command=self._compatible,
+            command=self.compatible,
             maxTimeLife=5,
         )
         self.writer.write(self.swap32_len(message=message))
