@@ -112,11 +112,11 @@ class Pproto(asyncio.Protocol, Base):
         writer.write(self.swap32_len(message=message, compress=self.use_compress))
         await writer.drain()
         if message.flags.compression.value == Compression.DISABLE.value:
-            self.writer.write((message.model_dump_json()).encode())
+            writer.write((message.model_dump_json()).encode())
         if self.use_compress:
             header = len(message.model_dump_json().encode("utf-8")).to_bytes(4, byteorder="big")
             data = zlib.compress(message.model_dump_json().encode("utf-8"))
-            self.writer.write(header + data)
+            writer.write(header + data)
         await writer.drain()
 
     def add_pproto_route(
