@@ -38,10 +38,9 @@ class MyCommand(MyContent):
 async def main():
     test_content = MyCommand(data="[eq]", num=1)
     # {data:"[eq]",num:1 ,command: "Dsasadasd"}
+    await test_content.send_with_answer()
 
-    answer: MyAnswer = await test_content.send_with_answer()
-
-    answer = await test_content.give_me_answer()
+    await test_content.give_me_answer()
 
 
 loop = asyncio.get_event_loop()
