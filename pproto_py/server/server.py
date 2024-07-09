@@ -60,15 +60,22 @@ class Pproto(asyncio.Protocol, Base):
         try:
             user_id = uuid4()
             self.clients[user_id] = (reader, writer)
+            await logger.info("INFO -- Hello message")
             await self.hello_message(user_id)
+            await logger.info("INFO -- Compatible message")
             await self.compatible_message(user_id)
             message: BaseMessage = BaseMessage(command=self.compatible)
         except PprotoCommonException as err:
             await logger.error(err)
         while message.command != Commands.CloseConnection.value:
             message_as_dict = await self.read_message(reader)
+            await logger.info("INFO -- New message")
+            await logger.info(f"INFO -- Message: {str(message_as_dict)}")
             try:
                 answer_response = await self.routers[UUID(message_as_dict["command"])].func(message_as_dict)
+                answer = await self.make_message(answer_response, BaseMessage(**message_as_dict))
+                if answer_response is not None:
+                    await self.send_answer(answer, writer)
             except Exception as ex:
                 if type(ex) in self.exception_handlers:
                     exception_response = await self.exception_handlers[type(ex)](message_as_dict, ex)
@@ -77,9 +84,6 @@ class Pproto(asyncio.Protocol, Base):
                     traceback_text = traceback.format_exc()
                     await logger.error(f"ERROR -- {traceback_text}")
                     raise ex
-            answer = await self.make_message(answer_response, BaseMessage(**message_as_dict))
-            if answer_response is not None:
-                await self.send_answer(answer, writer)
         await writer.wait_closed()
 
     async def run(self):
