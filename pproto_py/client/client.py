@@ -3,6 +3,7 @@ import zlib
 import asyncio
 from uuid import UUID
 from pydantic import TypeAdapter
+from pydantic_core import from_json
 from pproto_py.core import Formats, Commands, FormatsException
 from pproto_py.schemas import BaseMessage, FlagMessage, Compression, Status
 from pproto_py.base import Base
@@ -60,7 +61,20 @@ class Client(Base):
 
     @staticmethod
     async def __case_message(data: bytes, callback_func: dict) -> None:
-        as_dict = ast.literal_eval(data.decode("utf-8"))
+        # as_dict = ast.literal_eval(data.decode("utf-8"))
+        # TODO::Dont' use ast. JSON not equal Python dict.
+        """
+        ast.literal_eval:
+          Safely evaluate an expression node or a Unicode or Latin-1 encoded string containing a Python expression.
+          The string or node provided may only consist of the following Python literal structures:
+          strings, numbers, tuples, lists, dicts, booleans, and None.
+
+        JSON booleans != Python booleans -> false != False
+        JSON null != Python None
+        Please read JSON standard ECMA-404
+        https://www.json.org
+        """
+        as_dict = from_json(data)
         as_dict["flags"] = FlagMessage.parse_obj(as_dict["flags"])
         message = TypeAdapter(BaseMessage).validate_python(as_dict)
         match message.flags.exec_status.value:
@@ -76,7 +90,8 @@ class Client(Base):
 
     async def _read_with_callback(self, callback_func: dict) -> None:
         data_size = int.from_bytes(await self.reader.read(4), signed=True)
-        data = await self.reader.read(abs(data_size))
+        # TODO::read(n) might return less than 'n'
+        data = await self.reader.readexactly(abs(data_size))
         if data_size < 0:
             data = zlib.decompress(data[4:])
         await self.__case_message(data, callback_func)
