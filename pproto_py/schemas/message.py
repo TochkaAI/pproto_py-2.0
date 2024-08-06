@@ -111,7 +111,7 @@ class BaseMessage(BaseModel):
     flags: FlagMessage = Field(..., default_factory=FlagMessage)
     tags: list = None
     content: BaseModel | None = None
-    max_time_life: int = 1000
+    max_time_life: int = 30
 
     model_config = ConfigDict(
         alias_generator=to_camel,
@@ -122,11 +122,17 @@ class BaseMessage(BaseModel):
     @model_serializer()
     def serialize_model(self):
         if self.content is None:
-            return {"id": self.id, "command": self.command, "flags": self.flags.model_dump()}
+            return {
+                "id": self.id,
+                "command": self.command,
+                "flags": self.flags.model_dump(),
+                "maxTimeLife": self.max_time_life,
+            }
         else:
             return {
                 "id": self.id,
                 "command": self.command,
                 "flags": self.flags.model_dump(),
                 "content": self.content.model_dump(),
+                "maxTimeLife": self.max_time_life,
             }
