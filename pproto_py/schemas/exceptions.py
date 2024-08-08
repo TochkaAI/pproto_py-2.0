@@ -5,4 +5,4 @@ from pydantic import BaseModel
 class BasePprotoErrorContent(BaseModel):
     group: int
     code: UUID
-    error: str
+    description: str
