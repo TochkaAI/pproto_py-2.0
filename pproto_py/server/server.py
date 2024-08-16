@@ -1,5 +1,5 @@
+import json
 import traceback
-import ast
 import zlib
 from uuid import UUID, uuid4
 from typing import Dict, Callable
@@ -101,7 +101,7 @@ class Pproto(asyncio.Protocol, Base):
         data = await reader.read(abs(data_size))
         if data_size < 0:
             data = zlib.decompress(data[4:])
-        as_dict = ast.literal_eval(data.decode("utf-8"))
+        as_dict = json.loads(data.decode("utf-8"))
         as_dict["flags"] = FlagMessage.parse_obj(as_dict["flags"])
         return as_dict
 
