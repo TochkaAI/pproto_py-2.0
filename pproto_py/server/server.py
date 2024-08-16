@@ -1,9 +1,10 @@
-import json
+
 import traceback
 import zlib
 from uuid import UUID, uuid4
 from typing import Dict, Callable
 from asyncio.streams import StreamReader, StreamWriter
+from pydantic_core import from_json
 import asyncio
 
 from pproto_py.core import Formats, Commands, PprotoCommonException, FormatsException, logger
@@ -101,7 +102,7 @@ class Pproto(asyncio.Protocol, Base):
         data = await reader.read(abs(data_size))
         if data_size < 0:
             data = zlib.decompress(data[4:])
-        as_dict = json.loads(data.decode("utf-8"))
+        as_dict = from_json(data.decode("utf-8"))
         as_dict["flags"] = FlagMessage.parse_obj(as_dict["flags"])
         return as_dict
 
