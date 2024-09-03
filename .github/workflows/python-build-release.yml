@@ -1,8 +1,9 @@
 name: Build Python Package
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - '*'
 
 env:
   PYTHON_VERSION: '3.11'
