@@ -7,6 +7,7 @@ classifiers=[
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
+readme = "README.md"
 
 [project.urls]
 Homepage="https://github.com/TochkaAI/pproto_py"
