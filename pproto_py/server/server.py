@@ -1,4 +1,3 @@
-
 import traceback
 import zlib
 from uuid import UUID, uuid4
@@ -44,7 +43,7 @@ class Pproto(asyncio.Protocol, Base):
         __writer.write(message.model_dump_json().encode())
         await __writer.drain()
         data_size = int.from_bytes(await __reader.read(4), signed=True)
-        data_compatible = await __reader.read(data_size)
+        await __reader.read(data_size)
         # TODO check compatible
 
     async def hello_message(self, user_id: UUID) -> None:

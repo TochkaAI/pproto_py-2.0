@@ -1,4 +1,3 @@
-import ast
 import zlib
 import asyncio
 from uuid import UUID
@@ -10,14 +9,15 @@ from pproto_py.base import Base
 
 
 class Client(Base):
-
-    def __init__(self,
+    def __init__(
+        self,
         host="127.0.0.1",
         port=8888,
         format=Formats.JSON_PROTOCOL_FORMAT.value,
         compatible=Commands.Compatible.value,
         use_compress=False,
-        compress_level: int = -1,):
+        compress_level: int = -1,
+    ):
         self.__host = host
         self.__port = port
         self.writer, self.reader = None, None
@@ -25,10 +25,11 @@ class Client(Base):
         self.compatible = compatible
         self.use_compress = use_compress
         self.compress_level = compress_level
-    
-    async def create_connect(self,) -> None:
-        self.status_connect = await self.connect()
 
+    async def create_connect(
+        self,
+    ) -> None:
+        self.status_connect = await self.connect()
 
     async def hello_message(self) -> None:
         format = UUID(self.__format).bytes
@@ -48,7 +49,7 @@ class Client(Base):
 
     async def compatible_message(self) -> None:
         data_size = int.from_bytes(await self.reader.read(4))
-        data_compatible = await self.reader.read(data_size)
+        await self.reader.read(data_size)
         message = BaseMessage(
             command=self.compatible,
             maxTimeLife=5,
@@ -86,7 +87,6 @@ class Client(Base):
                 await callback_func["error"](data)
             case Status.UNKNOWN.value:
                 await callback_func["unknown"](data)
-
 
     async def _read_with_callback(self, callback_func: dict) -> None:
         data_size = int.from_bytes(await self.reader.read(4), signed=True)
