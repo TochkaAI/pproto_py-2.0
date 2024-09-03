@@ -6,7 +6,7 @@ with open('requirements.txt') as f:
 
 setup(
     name="pproto-py",
-    version="2.0.8",
+    version="2.0.9",
     description='pproto_py is Python implementation of "Point Of View" communication protocol',
     url="https://github.com/TochkaAI/pproto_py-2.0",
     packages=find_packages(),
