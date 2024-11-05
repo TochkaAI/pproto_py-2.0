@@ -1,8 +1,11 @@
+from typing import Any
 import zlib
 import asyncio
 from uuid import UUID
+
 from pydantic import TypeAdapter
 from pydantic_core import from_json
+
 from pproto_py.core import Formats, Commands, FormatsException
 from pproto_py.schemas import BaseMessage, FlagMessage, Compression, Status
 from pproto_py.base import Base
@@ -13,23 +16,29 @@ class Client(Base):
         self,
         host="127.0.0.1",
         port=8888,
+        *,
         format=Formats.JSON_PROTOCOL_FORMAT.value,
         compatible=Commands.Compatible.value,
         use_compress=False,
-        compress_level: int = -1,
+        compress_level: int = Compression.UNDEFINED,
     ):
         self.__host = host
         self.__port = port
-        self.writer, self.reader = None, None
+        self.writer, self.reader = None, None  # type: asyncio.StreamWriter | None, asyncio.StreamReader | None
         self.__format = format
         self.compatible = compatible
         self.use_compress = use_compress
         self.compress_level = compress_level
 
-    async def create_connect(
-        self,
-    ) -> None:
-        self.status_connect = await self.connect()
+    @classmethod
+    async def create_connect(cls, host: str, port: int, *args: Any, **kwargs: Any) -> "Client":
+        self = cls(host, port, *args, **kwargs)
+        await self.connect()
+        return self
+
+    @property
+    def is_connected(self) -> bool:
+        return self.writer is not None
 
     async def hello_message(self) -> None:
         format = UUID(self.__format).bytes

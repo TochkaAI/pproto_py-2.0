@@ -26,6 +26,7 @@ class Priority(Enum):
 
 
 class Compression(Enum):
+    UNDEFINED = -1
     NONE = 0
     ZIP = 1
     LZMA = 2
@@ -41,7 +42,7 @@ class SerializationFormat:
 
 def int2bit(x: int, size: int):
     """
-    перевод в int в фиксированные 4 байта
+    Перевод в int в фиксированные 4 байта
     """
     return bin(x)[2:].zfill(size)
 

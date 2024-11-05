@@ -1,6 +1,14 @@
-from pproto_py.client import Client
+from typing import TypeVar, Type
+
 from pydantic import BaseModel, TypeAdapter
 from pydantic_core import from_json
+
+from pproto_py.client import Client
+from pproto_py.content import BaseContent
+
+
+ModelType = TypeVar("ModelType", bound=BaseModel)
+ContentType = TypeVar("ContentType", bound=BaseContent)
 
 
 def session(func):
@@ -18,8 +26,8 @@ async def format_answer(raw_records: dict, model: BaseModel) -> BaseModel | None
     return map(lambda x: model(**x), raw_records)
 
 
-def to_model(model: BaseModel):
-    def outher(func):
+def to_model(model: Type[ModelType | ContentType]):
+    def outer(func):
         async def inner(*args, **kwargs):
             # as_str = ast.literal_eval(args[1].decode("utf-8"))
             # TODO::Dont' use ast. JSON not equal Python dict.
@@ -45,4 +53,4 @@ def to_model(model: BaseModel):
 
         return inner
 
-    return outher
+    return outer

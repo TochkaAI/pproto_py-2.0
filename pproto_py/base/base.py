@@ -4,7 +4,7 @@ from pproto_py.schemas import BaseMessage
 
 class Base:
     @staticmethod
-    def swap32_len(message: BaseMessage, compress: bool = False) -> int:
+    def swap32_len(message: BaseMessage, compress: bool = False) -> bytes:
         if compress:
             message_size = len(zlib.compress(message.model_dump_json().encode("utf-8"))) * -1
         else:
