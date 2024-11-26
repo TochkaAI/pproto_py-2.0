@@ -20,3 +20,11 @@ class TypeMessageError(PprotoCommonException):
     def __init__(self, error: str) -> None:
         super().__init__()
         self.error = error
+
+
+class PprotoConnectionError(PprotoCommonException):
+    ...
+
+
+class CommandTimeLifeOutError(PprotoCommonException):
+    ...

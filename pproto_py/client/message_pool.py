@@ -4,7 +4,7 @@ from typing import TypeVar
 from pproto_py.schemas import BaseMessage
 from pproto_py.core.exceptions import CommandTimeLifeOutError
 
-MessageKeyT = TypeVar('MessageKeyT')
+MessageKeyT = TypeVar("MessageKeyT")
 
 
 class MessagePool(dict):
@@ -35,7 +35,7 @@ class MessagePool(dict):
         self[message.id] = message
 
     def dell_message(self, message: BaseMessage):
-        if message_id:=message.id in self:
+        if message_id := message.id in self:
             super().__delitem__(message_id)
         else:
             raise KeyError("Message does not exist in MessagePool")

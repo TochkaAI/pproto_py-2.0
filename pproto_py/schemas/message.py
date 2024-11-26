@@ -1,8 +1,10 @@
-from uuid import UUID, uuid4
-from pydantic import BaseModel, Field, model_serializer, PlainSerializer, ConfigDict
-from pydantic.alias_generators import to_camel
 from enum import Enum
 from typing import Annotated
+from uuid import UUID, uuid4
+
+from pydantic_core import from_json
+from pydantic import BaseModel, Field, model_serializer, PlainSerializer, ConfigDict, TypeAdapter
+from pydantic.alias_generators import to_camel
 
 
 class Type(Enum):
@@ -111,7 +113,7 @@ class BaseMessage(BaseModel):
     command: UUID
     flags: FlagMessage = Field(..., default_factory=FlagMessage)
     tags: list = None
-    content: BaseModel | None = None
+    content: BaseModel | dict | None = None
     max_time_life: int = 30
 
     model_config = ConfigDict(
@@ -137,3 +139,24 @@ class BaseMessage(BaseModel):
                 "content": self.content.model_dump(),
                 "maxTimeLife": self.max_time_life,
             }
+
+    @classmethod
+    def from_json(cls, json: str | bytes | bytearray) -> "BaseMessage":
+        # as_dict = ast.literal_eval(data.decode("utf-8"))
+        # TODO::Dont' use ast. JSON not equal Python dict.
+        """
+        ast.literal_eval:
+          Safely evaluate an expression node or a Unicode or Latin-1 encoded string containing a Python expression.
+          The string or node provided may only consist of the following Python literal structures:
+          strings, numbers, tuples, lists, dicts, booleans, and None.
+
+        JSON booleans != Python booleans -> false != False
+        JSON null != Python None
+        Please read JSON standard ECMA-404
+        https://www.json.org
+        """
+        json_dict = from_json(json)
+        json_dict["flags"] = FlagMessage.parse_obj(json_dict["flags"])
+        message = TypeAdapter(BaseMessage).validate_python(json_dict)  # type: ignore
+        message.content = json_dict["content"]
+        return message

@@ -28,13 +28,13 @@ class MessageReceiver(AsyncIterable):
                     data = zlib.decompress(data[4:])
                 message = BaseMessage.from_json(data)
             except asyncio.IncompleteReadError as err:
-                raise PprotoConnectionError("")
+                raise PprotoConnectionError("") from err
             except ConnectionRefusedError as err:
-                raise PprotoConnectionError("")
+                raise PprotoConnectionError("") from err
             except ConnectionResetError as err:
-                raise PprotoConnectionError("")
+                raise PprotoConnectionError("") from err
             except ConnectionError as err:
-                raise PprotoConnectionError("")
+                raise PprotoConnectionError("") from err
             except OSError as err:
                 raise PprotoConnectionError(f"Communication error: {err!r}") from err
         return message
