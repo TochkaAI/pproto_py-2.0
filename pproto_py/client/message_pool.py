@@ -35,14 +35,14 @@ class MessagePool(dict):
         self[message.id] = message
 
     def dell_message(self, message: BaseMessage):
-        if message_id := message.id in self:
+        if (message_id := message.id) in self:
             super().__delitem__(message_id)
         else:
             raise KeyError("Message does not exist in MessagePool")
 
     async def get_message(self, message_id: MessageKeyT, timeout=None) -> BaseMessage:
         try:
-            async with asyncio.timeout(timeout):
-                return await self[message_id]
+            async with asyncio.timeout(timeout if timeout != -1 else None):
+                return await self.__getitem__(message_id)
         except TimeoutError as err:
             raise CommandTimeLifeOutError(f"Command life-time out {timeout}: {err!r}") from err
