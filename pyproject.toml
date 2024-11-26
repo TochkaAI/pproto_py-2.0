@@ -1,6 +1,6 @@
 [project]
 name="pproto-py"
-version="2.1.3"
+version="2.1.4a"
 description='pproto_py is Python implementation of "Point Of View" communication protocol'
 classifiers=[
     "Programming Language :: Python :: 3",
