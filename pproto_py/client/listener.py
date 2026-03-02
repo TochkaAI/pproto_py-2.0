@@ -3,7 +3,7 @@ import zlib
 from collections.abc import AsyncIterable
 
 from pproto_py.schemas import BaseMessage
-from pproto_py.core.exceptions import PprotoConnectionError
+from pproto_py.core.exceptions import PprotoConnectionError, PProtoMessageError
 
 
 class MessageReceiver(AsyncIterable):
@@ -26,6 +26,9 @@ class MessageReceiver(AsyncIterable):
                 data = await self.reader.readexactly(abs(data_size))
                 if data_size < 0:
                     data = zlib.decompress(data[4:])
+                # Receive b'\x00\x00'
+                if not data:
+                    raise PProtoMessageError
                 message = BaseMessage.from_json(data)
             except asyncio.IncompleteReadError as err:
                 raise PprotoConnectionError("") from err

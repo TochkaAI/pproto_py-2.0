@@ -154,9 +154,12 @@ class BaseMessage(BaseModel):
         JSON null != Python None
         Please read JSON standard ECMA-404
         https://www.json.org
+        Raises:
+            ValidationError: If validation fails
+            ValueError: If deserialization fails.
         """
         json_dict = from_json(json)
         json_dict["flags"] = FlagMessage.parse_obj(json_dict["flags"])
         message = TypeAdapter(BaseMessage).validate_python(json_dict)  # type: ignore
-        message.content = json_dict["content"]
+        message.content = json_dict.get("content")
         return message

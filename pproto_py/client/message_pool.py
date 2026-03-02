@@ -7,7 +7,7 @@ from pproto_py.core.exceptions import CommandTimeLifeOutError
 MessageKeyT = TypeVar("MessageKeyT")
 
 
-class MessagePool(dict):
+class MessagePool(dict[MessageKeyT, BaseMessage]):
     _pending: dict[MessageKeyT, asyncio.Event] = {}
 
     def __init__(self, *args, **kwargs):
@@ -18,12 +18,15 @@ class MessagePool(dict):
             return super().__getitem__(key)
         except KeyError:
             pass
-        try:
-            event = self._pending[key]
-        except KeyError:
+        if key not in self._pending:
             self._pending[key] = asyncio.Event()
-            event = self._pending[key]
-        await event.wait()
+        event = self._pending[key]
+        try:
+            await event.wait()
+        finally:
+            if key in self._pending:
+                self._pending.pop(key)
+                event.clear()
         return super().__getitem__(key)
 
     def __setitem__(self, key, value):

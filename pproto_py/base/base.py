@@ -1,4 +1,5 @@
 import zlib
+
 from pproto_py.schemas import BaseMessage
 
 

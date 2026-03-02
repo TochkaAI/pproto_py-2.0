@@ -19,7 +19,7 @@ class Client(Base):
         host="127.0.0.1",
         port=8888,
         *,
-        format=Formats.JSON_PROTOCOL_FORMAT.value,
+        protocol_format=Formats.JSON_PROTOCOL_FORMAT.value,
         compatible=Commands.Compatible.value,
         use_compress=False,
         compress_level: int = Compression.UNDEFINED,
@@ -27,7 +27,7 @@ class Client(Base):
         self.__host = host
         self.__port = port
         self.writer, self.reader = None, None  # type: asyncio.StreamWriter | None, asyncio.StreamReader | None
-        self.__format = format
+        self.__protocol_format = protocol_format
         self.compatible = compatible
         self.use_compress = use_compress
         self.compress_level = compress_level
@@ -66,11 +66,11 @@ class Client(Base):
         return True
 
     async def hello_message(self) -> None:
-        format = UUID(self.__format).bytes
-        self.writer.write(format)
+        protocol_format = UUID(self.__protocol_format).bytes
+        self.writer.write(protocol_format)
         await self.writer.drain()
         data = await self.reader.read(16)
-        if data != format:
+        if data != protocol_format:
             raise FormatsException(error="The server format is different from the client")
 
     async def compatible_message(self) -> None:
@@ -78,7 +78,7 @@ class Client(Base):
         await self.reader.read(data_size)
         message = BaseMessage(
             command=self.compatible,
-            maxTimeLife=5,
+            max_time_life=5,
         )
         self.writer.write(self.swap32_len(message=message))
         await self.writer.drain()
