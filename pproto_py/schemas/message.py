@@ -2,9 +2,9 @@ from enum import Enum
 from typing import Annotated
 from uuid import UUID, uuid4
 
-from pydantic_core import from_json
-from pydantic import BaseModel, Field, model_serializer, PlainSerializer, ConfigDict, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, TypeAdapter, model_serializer
 from pydantic.alias_generators import to_camel
+from pydantic_core import from_json
 
 
 class Type(Enum):
@@ -103,6 +103,11 @@ class FlagMessage(BaseModel):
             b_string = b_string[f_field.size :]
         return flag
 
+    def from_base_message(self, base_message: "BaseMessage") -> None:
+        self.content_is_empty.value = 1 if base_message.content is not None else 0
+        self.tags_is_empty.value = 1 if base_message.tags is not None else 0
+        self.max_time_life_is_empty.value = 1 if base_message.max_time_life is not None else 0
+
 
 class Serialize(Enum):
     JSON = "fea6b958-dafb-4f5c-b620-fe0aafbd47e2"
@@ -111,8 +116,8 @@ class Serialize(Enum):
 class BaseMessage(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     command: UUID
-    flags: FlagMessage = Field(..., default_factory=FlagMessage)
-    tags: list = None
+    flags: FlagMessage = Field(default_factory=FlagMessage)
+    tags: list | None = Field(default=None)
     content: BaseModel | dict | None = None
     max_time_life: int = 30
 
@@ -124,11 +129,13 @@ class BaseMessage(BaseModel):
 
     @model_serializer()
     def serialize_model(self):
+        self.flags.from_base_message(self)
         if self.content is None:
             return {
                 "id": self.id,
                 "command": self.command,
                 "flags": self.flags.model_dump(),
+                "tags": self.tags,
                 "maxTimeLife": self.max_time_life,
             }
         else:
@@ -136,6 +143,7 @@ class BaseMessage(BaseModel):
                 "id": self.id,
                 "command": self.command,
                 "flags": self.flags.model_dump(),
+                "tags": self.tags,
                 "content": self.content.model_dump(),
                 "maxTimeLife": self.max_time_life,
             }

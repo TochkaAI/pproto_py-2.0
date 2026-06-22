@@ -1,10 +1,9 @@
-from typing import TypeVar, Type
+from typing import Type, TypeVar
 
 from pydantic import BaseModel, TypeAdapter
 
 from pproto_py.client import Client
 from pproto_py.content import BaseContent
-
 
 ModelType = TypeVar("ModelType", bound=BaseModel)
 ContentType = TypeVar("ContentType", bound=BaseContent)

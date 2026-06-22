@@ -2,12 +2,20 @@ import asyncio
 import zlib
 from collections.abc import AsyncIterable
 
-from pproto_py.schemas import BaseMessage
 from pproto_py.core.exceptions import PprotoConnectionError, PProtoMessageError
+from pproto_py.schemas import BaseMessage
+
+
+def bytes_to_human_readable(num: int, suffix="B") -> str:
+    for unit in ["", "K", "M", "G", "T", "P", "E", "Z"]:
+        if abs(num) < 1024.0:
+            return f"{num:3.1f}{unit}{suffix}"
+        num /= 1024.0
+    return f"{num:.1f}Yi{suffix}"
 
 
 class MessageReceiver(AsyncIterable):
-    def __init__(self, reader: asyncio.StreamReader):
+    def __init__(self, reader: asyncio.StreamReader) -> None:
         self.reader = reader
         self.lock = asyncio.Lock()
 
@@ -28,7 +36,7 @@ class MessageReceiver(AsyncIterable):
                     data = zlib.decompress(data[4:])
                 # Receive b'\x00\x00'
                 if not data:
-                    raise PProtoMessageError
+                    raise PProtoMessageError("Empty message")
                 message = BaseMessage.from_json(data)
             except asyncio.IncompleteReadError as err:
                 raise PprotoConnectionError("") from err

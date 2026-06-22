@@ -1,15 +1,18 @@
+import asyncio
 import traceback
 import zlib
-from uuid import UUID, uuid4
-from typing import Dict, Callable
 from asyncio.streams import StreamReader, StreamWriter
-from pydantic_core import from_json
-import asyncio
+from collections.abc import Callable
+from typing import Dict
+from uuid import UUID, uuid4
 
-from pproto_py.core import Formats, Commands, PprotoCommonException, FormatsException, logger
-from pproto_py.schemas import BaseMessage, FlagMessage, Type, Status, Compression
-from pproto_py.content import BaseContent
+from pydantic_core import from_json
+
 from pproto_py.base import Base
+from pproto_py.content import BaseContent
+from pproto_py.core import Commands, Formats, FormatsException, PprotoCommonException, logger
+from pproto_py.schemas import BaseMessage, Compression, FlagMessage, Status, Type
+
 from .router import Command
 
 

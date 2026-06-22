@@ -1,14 +1,15 @@
-from typing import Any
-import zlib
 import asyncio
-from uuid import UUID
 import logging
+import zlib
+from asyncio import CancelledError
+from typing import Any
+from uuid import UUID
 
-from pproto_py.core import Formats, Commands, FormatsException
-from pproto_py.schemas import BaseMessage, Compression, Status
 from pproto_py.base import Base
 from pproto_py.client.listener import MessageReceiver
 from pproto_py.client.message_pool import MessagePool
+from pproto_py.core import Commands, Formats, FormatsException
+from pproto_py.schemas import BaseMessage, Compression, Status
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ class Client(Base):
         compatible=Commands.Compatible.value,
         use_compress=False,
         compress_level: int = Compression.UNDEFINED,
-    ):
+    ) -> None:
         self.__host = host
         self.__port = port
         self.writer, self.reader = None, None  # type: asyncio.StreamWriter | None, asyncio.StreamReader | None
@@ -87,16 +88,16 @@ class Client(Base):
         # TODO data_compatible checking
 
     @staticmethod
-    async def __case_message(message: BaseMessage, callback_func: dict) -> None:
+    async def __case_message(message: BaseMessage, callback_func: dict) -> Any:
         match message.flags.exec_status.value:
             case Status.SUCCESS.value:
-                await callback_func["answer"](message.content)
+                return await callback_func["answer"](message.content)
             case Status.FAILED.value:
-                await callback_func["failed"](message.content)
+                return await callback_func["failed"](message.content)
             case Status.ERROR.value:
-                await callback_func["error"](message.content)
+                return await callback_func["error"](message.content)
             case Status.UNKNOWN.value:
-                await callback_func["unknown"](message.content)
+                return await callback_func["unknown"](message.content)
 
     async def __message_listener(self, message_receiver: MessageReceiver, message_pool: MessagePool):
         # TODO::Heartbeat or pinp-pong:@cans1194
@@ -120,13 +121,15 @@ class Client(Base):
 
     async def _read_with_callback(self, message: BaseMessage, callback_func: dict) -> None:
         received_message = await self.__message_pool.get_message(message.id, message.max_time_life)
-        await self.__case_message(received_message, callback_func)
+        answer = await self.__case_message(received_message, callback_func)
         self.__message_pool.dell_message(received_message)
+        return answer
 
     async def write(self, message: BaseMessage) -> None:
         # TODO переписат ьс првоеркой на use_commpress
         self.writer.write(self.swap32_len(message=message, compress=self.use_compress))
         await self.writer.drain()
+        logger.debug(f"Write message: {message!r} on {self!r}")
         if message.flags.compression.value == Compression.DISABLE.value:
             self.writer.write((message.model_dump_json()).encode())
         if self.use_compress:
@@ -138,13 +141,25 @@ class Client(Base):
     async def write_with_callback(self, message: BaseMessage, callback_func: dict) -> None:
         self.writer.write(self.swap32_len(message=message))
         await self.writer.drain()
+        logger.debug(f"Write message: {message!r} on {self!r}")
         if message.flags.compression.value == Compression.DISABLE.value:
             self.writer.write((message.model_dump_json()).encode())
         if message.flags.compression.value == Compression.NONE.value:
             self.writer.write(zlib.compress(message.model_dump_json().encode("utf-8")))
         await self.writer.drain()
-        await self._read_with_callback(message, callback_func)
+        return await self._read_with_callback(message, callback_func)
 
     async def close(self) -> None:
-        self.writer.close()
-        await self.writer.wait_closed()
+        if self.writer is None or self.reader is None:
+            logger.warning("Connection already closed.")
+            return
+        try:
+            self.writer.close()
+            self.__message_receiver_task.cancel()
+            await self.writer.wait_closed()
+        except (OSError, ConnectionError, CancelledError) as err:
+            logger.warning(f"Error during client close: {err}")
+        except Exception as err:
+            logger.error(f"Unexpected error during close: {err}", exc_info=True)
+        finally:
+            logger.info("Client connection closed")

@@ -1,5 +1,6 @@
-from typing import Callable, Optional, Dict
+from typing import Callable, Dict, Optional
 from uuid import UUID
+
 from pproto_py.content import BaseContent
 from pproto_py.schemas import BaseMessage
 
