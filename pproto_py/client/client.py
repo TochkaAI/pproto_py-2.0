@@ -10,6 +10,7 @@ from pproto_py.client.listener import MessageReceiver
 from pproto_py.client.message_pool import MessagePool
 from pproto_py.core import Commands, Formats, FormatsException
 from pproto_py.schemas import BaseMessage, Compression, Status
+from pproto_py.client.message_dispatcher import MessageDispatcher, MessageHandler
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ class Client(Base):
         self.__message_receiver: MessageReceiver | None = None
         self.__message_pool: MessagePool | None = None
         self.__message_receiver_task: asyncio.Task | None = None
+        self.__message_dispatcher: MessageDispatcher = MessageDispatcher()
 
     @classmethod
     async def create_connect(cls, host: str, port: int, *args: Any, **kwargs: Any) -> "Client":
@@ -51,8 +53,9 @@ class Client(Base):
         return f"<{self.__class__.__name__}>({self.__host}:{self.__port})"
 
     async def connect(self) -> bool:
-        logger.debug(f"Connected {self}")
+        logger.debug(f"Connecting to {self}")
         reader, writer = await asyncio.open_connection(self.__host, self.__port)
+        logger.debug(f"Connected {self}")
         self.writer = writer
         self.reader = reader
         # init message utils
@@ -107,16 +110,18 @@ class Client(Base):
         try:
             async for message in message_receiver:  # type: BaseMessage
                 logger.debug(f"Received message: {message!r} on {self!r}")
-                #
+
                 handler = base_commands_handlers.get(message.command, None)
                 if handler:
                     if asyncio.iscoroutinefunction(handler):
                         await handler()
                 else:
-                    message_pool.add_message(message)
+                    if message_pool.is_waiting(message.id):
+                        message_pool.add_message(message)
+                    else:
+                        await self.__message_dispatcher.dispatch(message)
         except asyncio.CancelledError:
             logger.error(f"Connection {self!r} canceled")
-            self.__message_receiver_task.cancel()
             raise
 
     async def _read_with_callback(self, message: BaseMessage, callback_func: dict) -> None:
@@ -139,6 +144,7 @@ class Client(Base):
         await self.writer.drain()
 
     async def write_with_callback(self, message: BaseMessage, callback_func: dict) -> None:
+        # TODO:: Регистрировать id в message_pool
         self.writer.write(self.swap32_len(message=message))
         await self.writer.drain()
         logger.debug(f"Write message: {message!r} on {self!r}")
@@ -148,6 +154,13 @@ class Client(Base):
             self.writer.write(zlib.compress(message.model_dump_json().encode("utf-8")))
         await self.writer.drain()
         return await self._read_with_callback(message, callback_func)
+
+    def on_message(self, command: UUID):
+        def wrapper(func: MessageHandler) -> MessageHandler:
+            self.__message_dispatcher.subscribe(command, func)
+            return func
+
+        return wrapper
 
     async def close(self) -> None:
         if self.writer is None or self.reader is None:

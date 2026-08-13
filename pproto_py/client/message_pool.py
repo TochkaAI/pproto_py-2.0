@@ -43,6 +43,9 @@ class MessagePool(dict[MessageKeyT, BaseMessage]):
         else:
             raise KeyError("Message does not exist in MessagePool")
 
+    def is_waiting(self, message_id: MessageKeyT) -> bool:
+        return message_id in self._pending
+
     async def get_message(self, message_id: MessageKeyT, timeout=None) -> BaseMessage:
         try:
             async with asyncio.timeout(timeout if timeout != -1 else None):
