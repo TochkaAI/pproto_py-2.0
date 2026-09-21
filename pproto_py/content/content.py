@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from pproto_py.client import Client
 from pproto_py.content.config import ContentConfig
-from pproto_py.core.exceptions import TypeMessageError
+from pproto_py.core.exceptions import ErrorResponseError, TypeMessageError
 from pproto_py.schemas import BaseMessage, Type
 
 
@@ -42,4 +42,10 @@ class BaseContent(BaseModel):
         message = BaseMessage(**message_params, content=content)
         if message.flags.type.value == Type.EVENT:
             raise TypeMessageError("Event don't have a answer!")
-        return await server.write_with_callback(message, {"answer": answer})
+        return await server.write_with_callback(
+            message,
+            {
+                "answer": answer,
+                "error": lambda msg: (_ for _ in ()).throw(ErrorResponseError(msg)),
+            },
+        )
