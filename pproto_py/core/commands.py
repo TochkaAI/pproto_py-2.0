@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class Commands(Enum):
+class Commands(StrEnum):
     Compatible = "173cbbeb-1d81-4e01-bf3c-5d06f9c878c3"
     Unknown = "4aef29d6-5b1a-4323-8655-ef0d4f1bb79d"
     Error = "b18b98cc-b026-4bfe-8e33-e7afebfbe78b"
@@ -9,5 +9,5 @@ class Commands(Enum):
     EchoConnection = "db702b07-7f5a-403f-963a-ec50d41c7305"
 
 
-class Formats(Enum):
+class Formats(StrEnum):
     JSON_PROTOCOL_FORMAT = "fea6b958-dafb-4f5c-b620-fe0aafbd47e2"

@@ -52,3 +52,7 @@ class MessagePool(dict[MessageKeyT, BaseMessage]):
                 return await self.__getitem__(message_id)
         except TimeoutError as err:
             raise CommandTimeLifeOutError(f"Command life-time out {timeout}: {err!r}") from err
+
+    def fail_all(self, exception: Exception) -> None:
+        for pending in self._pending.values():
+            pending.set()

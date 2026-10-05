@@ -45,7 +45,17 @@ class BaseContent(BaseModel):
         return await server.write_with_callback(
             message,
             {
-                "answer": answer,
+                "answer": answer if "answer" not in type(self).__dict__ else self.answer,
                 "error": lambda msg: (_ for _ in ()).throw(ErrorResponseError(msg)),
             },
         )
+
+    async def send_with_answer(self, server: Client, **message_params):
+        return await self.send_wa(server, **message_params)
+
+    async def send_with_message_response(self, server: Client, **message_params) -> BaseMessage:
+        content = None if self.content_config.get("empty_content", False) else self
+        message = BaseMessage(**message_params, content=content)
+        if message.flags.type.value == Type.EVENT:
+            raise TypeMessageError("Event don't have a answer!")
+        return await server.with_message_response(message)

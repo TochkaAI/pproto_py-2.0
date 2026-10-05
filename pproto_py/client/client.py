@@ -1,16 +1,18 @@
 import asyncio
 import logging
+import random
 import zlib
 from asyncio import CancelledError
-from typing import Any
+from typing import Any, Callable, Awaitable
 from uuid import UUID
 
 from pproto_py.base import Base
 from pproto_py.client.listener import MessageReceiver
+from pproto_py.client.message_dispatcher import MessageDispatcher, MessageHandler
 from pproto_py.client.message_pool import MessagePool
 from pproto_py.core import Commands, Formats, FormatsException
+from pproto_py.core.exceptions import ErrorResponseError, CommandTimeLifeOutError
 from pproto_py.schemas import BaseMessage, Compression, Status
-from pproto_py.client.message_dispatcher import MessageDispatcher, MessageHandler
 
 logger = logging.getLogger(__name__)
 
@@ -19,12 +21,15 @@ class Client(Base):
     def __init__(
         self,
         host="127.0.0.1",
-        port=8888,
+        port: int = 8888,
         *,
-        protocol_format=Formats.JSON_PROTOCOL_FORMAT.value,
+        protocol_format: Formats = Formats.JSON_PROTOCOL_FORMAT.value,
         compatible=Commands.Compatible.value,
         use_compress=False,
         compress_level: int = Compression.UNDEFINED,
+        reconnect_attempts: int | None = None,
+        reconnect_delay: int = 1,
+        reconnect_max_delay: int = 30,
     ) -> None:
         self.__host = host
         self.__port = port
@@ -37,7 +42,19 @@ class Client(Base):
         self.__message_receiver: MessageReceiver | None = None
         self.__message_pool: MessagePool | None = None
         self.__message_receiver_task: asyncio.Task | None = None
+        self.__heartbeat_task: asyncio.Task | None = None
         self.__message_dispatcher: MessageDispatcher = MessageDispatcher()
+        self.connected: asyncio.Event = asyncio.Event()
+        self._heartbeat_timeout: int = 5
+        #
+        self._closing: bool = False
+        self._reconnect_lock: asyncio.Lock = asyncio.Lock()
+        self._reconnect_attempts: int | None = reconnect_attempts
+        self._reconnect_delay: int = reconnect_delay
+        self._reconnect_max_delay: int = reconnect_max_delay
+        #
+        self._on_reconnect_callbacks: list[Callable[[], Awaitable[None]]] = []
+        self._on_disconnect_callbacks: list[Callable[[], Awaitable[None]]] = []
 
     @classmethod
     async def create_connect(cls, host: str, port: int, *args: Any, **kwargs: Any) -> "Client":
@@ -47,9 +64,19 @@ class Client(Base):
 
     @property
     def is_connected(self) -> bool:
-        return self.writer is not None
+        return (
+            self.writer is not None
+            and self.__message_receiver_task is not None
+            and not self.__message_receiver_task.done()
+        )
 
-    def __str__(self):
+    def add_reconnect_callback(self, callback: Callable[[], Awaitable[None]]) -> None:
+        self._on_reconnect_callbacks.append(callback)
+
+    def add_disconnect_callback(self, callback: Callable[[], Awaitable[None]]) -> None:
+        self._on_disconnect_callbacks.append(callback)
+
+    def __str__(self) -> str:
         return f"<{self.__class__.__name__}>({self.__host}:{self.__port})"
 
     async def connect(self) -> bool:
@@ -90,6 +117,88 @@ class Client(Base):
         await self.writer.drain()
         # TODO data_compatible checking
 
+    async def echo_connection_heartbeat(self) -> None:
+        heartbeat_msg = BaseMessage(command=Commands.EchoConnection.value, content=None)
+
+        async def answer(content):
+            return content
+
+        callbacks = {
+            "answer": answer,
+            "error": lambda msg: (_ for _ in ()).throw(ErrorResponseError(msg)),
+        }
+        while self.connected.is_set():
+            await asyncio.sleep(self._heartbeat_timeout)
+            if not self.connected.is_set():
+                return
+            try:
+                await asyncio.wait_for(
+                    self.write_with_callback(heartbeat_msg, callbacks),
+                    timeout=self._heartbeat_timeout * 2,
+                )
+            except ErrorResponseError as err:
+                logger.error(f"Error during heartbeat: {err}")
+            except (asyncio.TimeoutError, CommandTimeLifeOutError):
+                logger.error(f"Heartbeat timeout on {self!r}, reconnecting...")
+                asyncio.create_task(self.__handle_disconnect())
+                return
+
+    async def _cleanup_connection(self) -> None:
+        self.connected.clear()
+        if self.__heartbeat_task and not self.__heartbeat_task.done():
+            self.__heartbeat_task.cancel()
+        if self.__message_receiver_task and not self.__message_receiver_task.done():
+            self.__message_receiver_task.cancel()
+        if self.__message_pool is not None:
+            self.__message_pool.fail_all(ConnectionError("Connection lost, reconnecting..."))
+        if self.writer is not None:
+            self.writer.close()
+            try:
+                await self.writer.wait_closed()
+            except Exception:  # noqa: BLE001
+                pass
+        self.writer, self.reader = None, None
+
+    async def _reconnect(self) -> None:
+        attempt = 0
+        delay = self._reconnect_delay
+        while True:
+            attempt += 1
+            if self._reconnect_attempts is not None and attempt > self._reconnect_attempts:
+                raise ConnectionError(f"Failed to reconnect to {self!r} after {attempt} attempts")
+            try:
+                logger.debug(f"Trying to reconnect to {self!r} (attempt {attempt})")
+                await self.connect()
+                for cb in self._on_reconnect_callbacks:
+                    asyncio.create_task(cb())
+                logger.info(f"Reconnected to {self!r} after {attempt} attempts")
+                return
+            except (OSError, ConnectionError, FormatsException):
+                logger.warning(f"Reconnect to {self!r} failed (attempt {attempt})")
+                await asyncio.sleep(delay + random.uniform(0, delay * 0.1))
+                delay = min(delay * 2, self._reconnect_max_delay)
+
+    async def __handle_echo_connection(self) -> None:
+        ...
+
+    async def __handle_close_connection(self) -> None:
+        ...
+
+    async def __handle_disconnect(self) -> None:
+        if self._closing:
+            return
+        if self._reconnect_lock.locked():
+            logger.debug(f"Reconnect already in progress for {self!r}")
+            return
+        async with self._reconnect_lock:
+            logger.warning(f"Connection lost on {self!r}, starting reconnect")
+            await self._cleanup_connection()
+            try:
+                await self._reconnect()
+            except ConnectionError as err:
+                logger.error(f"Giving up on {self!r}: {err}")
+                raise
+
     @staticmethod
     async def __case_message(message: BaseMessage, callback_func: dict) -> Any:
         match message.flags.exec_status.value:
@@ -102,14 +211,16 @@ class Client(Base):
             case Status.UNKNOWN.value:
                 return await callback_func["unknown"](message.content)
 
-    async def __message_listener(self, message_receiver: MessageReceiver, message_pool: MessagePool):
-        # TODO::Heartbeat or pinp-pong:@cans1194
+    async def __message_listener(self, message_receiver: MessageReceiver, message_pool: MessagePool) -> None:
+        self.connected.set()
         base_commands_handlers = {
-            Commands.CloseConnection.value: self.close(),
+            Commands.CloseConnection.value: self.close,
+            Commands.EchoConnection.value: self.__handle_echo_connection,
         }
+        self.__heartbeat_task = asyncio.create_task(self.echo_connection_heartbeat())
         try:
             async for message in message_receiver:  # type: BaseMessage
-                logger.debug(f"Received message: {message!r} on {self!r}")
+                logger.debug(f"Received message: {message!r} on {self!r}")  # noqa: G004
 
                 handler = base_commands_handlers.get(message.command, None)
                 if handler:
@@ -123,37 +234,44 @@ class Client(Base):
         except asyncio.CancelledError:
             logger.error(f"Connection {self!r} canceled")
             raise
+        except (ConnectionError, OSError) as err:
+            logger.error(f"Connection {self!r} lost: {err}")
+            if not self._closing:
+                asyncio.create_task(self._handle_disconnect())
 
-    async def _read_with_callback(self, message: BaseMessage, callback_func: dict) -> None:
+    async def _read_with_message_response(self, message: BaseMessage) -> BaseMessage:
+        received_message = await self.__message_pool.get_message(message.id, message.max_time_life)
+        self.__message_pool.dell_message(received_message)
+        return received_message
+
+    async def _read_with_callback(self, message: BaseMessage, callback_func: dict) -> tuple[BaseMessage, Any | None]:
         received_message = await self.__message_pool.get_message(message.id, message.max_time_life)
         answer = await self.__case_message(received_message, callback_func)
         self.__message_pool.dell_message(received_message)
-        return answer
+        return received_message, answer
 
     async def write(self, message: BaseMessage) -> None:
         # TODO переписат ьс првоеркой на use_commpress
         self.writer.write(self.swap32_len(message=message, compress=self.use_compress))
         await self.writer.drain()
         logger.debug(f"Write message: {message!r} on {self!r}")
-        if message.flags.compression.value == Compression.DISABLE.value:
+        if message.flags.compression.value == Compression.DISABLE.value or not self.use_compress:
             self.writer.write((message.model_dump_json()).encode())
-        if self.use_compress:
-            header = len(message.model_dump_json().encode("utf-8")).to_bytes(4, byteorder="big")
-            data = zlib.compress(message.model_dump_json().encode("utf-8"))
-            self.writer.write(header + data)
+        elif message.flags.compression.value == Compression.ZIP.value:
+            self.writer.write(zlib.compress(message.model_dump_json().encode("utf-8")))
+        else:
+            raise ValueError("Compression type not implemented")
         await self.writer.drain()
 
     async def write_with_callback(self, message: BaseMessage, callback_func: dict) -> None:
         # TODO:: Регистрировать id в message_pool
-        self.writer.write(self.swap32_len(message=message))
-        await self.writer.drain()
-        logger.debug(f"Write message: {message!r} on {self!r}")
-        if message.flags.compression.value == Compression.DISABLE.value:
-            self.writer.write((message.model_dump_json()).encode())
-        if message.flags.compression.value == Compression.NONE.value:
-            self.writer.write(zlib.compress(message.model_dump_json().encode("utf-8")))
-        await self.writer.drain()
-        return await self._read_with_callback(message, callback_func)
+        await self.write(message)
+        message, answer = await self._read_with_callback(message, callback_func)
+        return answer
+
+    async def with_message_response(self, message: BaseMessage) -> BaseMessage:
+        await self.write(message)
+        return await self._read_with_message_response(message)
 
     def on_message(self, command: UUID):
         def wrapper(func: MessageHandler) -> MessageHandler:
@@ -163,16 +281,22 @@ class Client(Base):
         return wrapper
 
     async def close(self) -> None:
+        self._closing = True
+        self.connected.clear()
         if self.writer is None or self.reader is None:
             logger.warning("Connection already closed.")
             return
         try:
+            if self.__heartbeat_task and not self.__heartbeat_task.done():
+                self.__heartbeat_task.cancel()
             self.writer.close()
-            self.__message_receiver_task.cancel()
+            if self.__message_receiver_task and not self.__message_receiver_task.done():
+                self.__message_receiver_task.cancel()
             await self.writer.wait_closed()
         except (OSError, ConnectionError, CancelledError) as err:
             logger.warning(f"Error during client close: {err}")
         except Exception as err:
             logger.error(f"Unexpected error during close: {err}", exc_info=True)
         finally:
+            self.writer, self.reader = None, None
             logger.info("Client connection closed")
