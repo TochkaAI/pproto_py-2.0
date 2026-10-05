@@ -127,8 +127,26 @@ class BaseMessage(BaseModel):
         from_attributes=True,
     )
 
+    def set_tag(self, value: int, index: int = 0):
+        if not self.tags:
+            tags = [0] * (index + 1)
+            tags[index] = value
+            return
+        if len(self.tags) > index:
+            self.tags[index] = value
+        else:
+            self.tags += [0] * (index - len(self.tags) + 1)
+            self.tags[index] = value
+
+    def tag(self, index: int = 0):
+        if index not in range(0, 254):
+            raise ValueError("Index value not in range [0..254]")
+        if not self.tags or len(self.tags) < index + 1:
+            raise ValueError("Tags is empty or index out of range")
+        return self.tags[index]
+
     @model_serializer()
-    def serialize_model(self):
+    def serialize_model(self) -> dict:
         self.flags.from_base_message(self)
         if self.content is None:
             return {
@@ -138,15 +156,14 @@ class BaseMessage(BaseModel):
                 "tags": self.tags,
                 "maxTimeLife": self.max_time_life,
             }
-        else:
-            return {
-                "id": self.id,
-                "command": self.command,
-                "flags": self.flags.model_dump(),
-                "tags": self.tags,
-                "content": self.content.model_dump(),
-                "maxTimeLife": self.max_time_life,
-            }
+        return {
+            "id": self.id,
+            "command": self.command,
+            "flags": self.flags.model_dump(),
+            "tags": self.tags,
+            "content": self.content.model_dump(),
+            "maxTimeLife": self.max_time_life,
+        }
 
     @classmethod
     def from_json(cls, json: str | bytes | bytearray) -> "BaseMessage":
