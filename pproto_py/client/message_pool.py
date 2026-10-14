@@ -9,6 +9,7 @@ MessageKeyT = TypeVar("MessageKeyT")
 
 class MessagePool(dict[MessageKeyT, BaseMessage]):
     _pending: dict[MessageKeyT, asyncio.Event] = {}
+    _failed: dict[MessageKeyT, Exception] = {}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -24,6 +25,9 @@ class MessagePool(dict[MessageKeyT, BaseMessage]):
         try:
             await event.wait()
         finally:
+            if self._failed:
+                exc = self._failed.pop(key)
+                raise exc
             if key in self._pending:
                 self._pending.pop(key)
                 event.clear()
@@ -33,6 +37,10 @@ class MessagePool(dict[MessageKeyT, BaseMessage]):
         super().__setitem__(key, value)
         if key in self._pending:
             self._pending.pop(key).set()
+
+    def register_wait(self, message_key: MessageKeyT):
+        if message_key not in self._pending:
+            self._pending[message_key] = asyncio.Event()
 
     def add_message(self, message: BaseMessage):
         self[message.id] = message
@@ -54,5 +62,6 @@ class MessagePool(dict[MessageKeyT, BaseMessage]):
             raise CommandTimeLifeOutError(f"Command life-time out {timeout}: {err!r}") from err
 
     def fail_all(self, exception: Exception) -> None:
+        self._failed = {key: exception for key in self._pending}
         for pending in self._pending.values():
             pending.set()

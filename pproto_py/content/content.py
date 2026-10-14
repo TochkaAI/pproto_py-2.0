@@ -6,15 +6,17 @@ from pydantic import BaseModel
 from pproto_py.client import Client
 from pproto_py.content.config import ContentConfig
 from pproto_py.core.exceptions import ErrorResponseError, TypeMessageError
-from pproto_py.schemas import BaseMessage, Type
+from pproto_py.schemas import BaseMessage, Type, Compression
 
 
 class BaseContent(BaseModel):
     content_config: ClassVar[ContentConfig] = ContentConfig()
 
-    async def send(self, server: Client, **message_params) -> UUID:
+    async def send(self, server: Client, compression: Compression = Compression.DISABLE, **message_params) -> UUID:
         content = None if self.content_config.get("empty_content", False) else self
         message = BaseMessage(**message_params, content=content)
+        if compression != Compression.DISABLE:
+            message.flags.compression.value = compression.value
         callable_func = {"answer": self.answer, "error": self.error, "failed": self.failed, "unknown": self.unknown}
         if message.flags.type.value != Type.EVENT.value:
             await server.write_with_callback(message, callable_func)

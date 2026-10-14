@@ -45,7 +45,7 @@ class Client(Base):
         self.__heartbeat_task: asyncio.Task | None = None
         self.__message_dispatcher: MessageDispatcher = MessageDispatcher()
         self.connected: asyncio.Event = asyncio.Event()
-        self._heartbeat_timeout: int = 5
+        self._heartbeat_timeout: int = 30
         #
         self._closing: bool = False
         self._reconnect_lock: asyncio.Lock = asyncio.Lock()
@@ -118,7 +118,7 @@ class Client(Base):
         # TODO data_compatible checking
 
     async def echo_connection_heartbeat(self) -> None:
-        heartbeat_msg = BaseMessage(command=Commands.EchoConnection.value, content=None)
+        heartbeat_msg = BaseMessage(command=Commands.EchoConnection.value, content=None, max_time_life=-1)
 
         async def answer(content):
             return content
@@ -251,25 +251,30 @@ class Client(Base):
         return received_message, answer
 
     async def write(self, message: BaseMessage) -> None:
-        # TODO переписат ьс првоеркой на use_commpress
-        self.writer.write(self.swap32_len(message=message, compress=self.use_compress))
-        await self.writer.drain()
-        logger.debug(f"Write message: {message!r} on {self!r}")
-        if message.flags.compression.value == Compression.DISABLE.value or not self.use_compress:
-            self.writer.write((message.model_dump_json()).encode())
-        elif message.flags.compression.value == Compression.ZIP.value:
-            self.writer.write(zlib.compress(message.model_dump_json().encode("utf-8")))
+        # FIXME::Добавить опцию на сжатие только контента
+        if self.use_compress:
+            data_bytes = zlib.compress(message.model_dump_json().encode("utf-8"))
         else:
-            raise ValueError("Compression type not implemented")
+            data_bytes = message.model_dump_json().encode()
+        self.writer.write(
+            self.swap32_bytes_len(
+                data=data_bytes,
+                compress=self.use_compress,
+            )
+        )
+        await self.writer.drain()
+        self.writer.write(data_bytes)
+        logger.debug(f"Write message: {message!r} on {self!r}")
         await self.writer.drain()
 
     async def write_with_callback(self, message: BaseMessage, callback_func: dict) -> None:
-        # TODO:: Регистрировать id в message_pool
+        self.__message_pool.register_wait(message.id)
         await self.write(message)
         message, answer = await self._read_with_callback(message, callback_func)
         return answer
 
     async def with_message_response(self, message: BaseMessage) -> BaseMessage:
+        self.__message_pool.register_wait(message.id)
         await self.write(message)
         return await self._read_with_message_response(message)
 
